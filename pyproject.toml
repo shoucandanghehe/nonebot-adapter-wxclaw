@@ -28,9 +28,9 @@ test = [
 ]
 
 [project.urls]
-homepage = "https://github.com/nonebot/adapter-wxclaw"
-repository = "https://github.com/nonebot/adapter-wxclaw"
-documentation = "https://github.com/nonebot/adapter-wxclaw"
+homepage = "https://github.com/shoucandanghehe/nonebot-adapter-wxclaw"
+repository = "https://github.com/shoucandanghehe/nonebot-adapter-wxclaw"
+documentation = "https://github.com/shoucandanghehe/nonebot-adapter-wxclaw"
 
 [tool.uv.build-backend]
 module-name = "nonebot.adapters.wxclaw"
