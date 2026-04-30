@@ -72,7 +72,6 @@ class Adapter(BaseAdapter):
                 )
                 continue
             bot = Bot(self, account.account_id, account)
-            self.bot_connect(bot)
             task = asyncio.create_task(self._start_polling(bot))
             self._tasks.append(task)
             log("INFO", f"Started polling for account {account.account_id}")
@@ -101,10 +100,15 @@ class Adapter(BaseAdapter):
     async def _start_polling(self, bot: Bot) -> None:
         retry_delay = 1.0
         max_retry_delay = 60.0
+        connected = False
 
         while True:
             try:
                 resp = await bot.get_updates()
+
+                if not connected:
+                    self.bot_connect(bot)
+                    connected = True
 
                 retry_delay = 1.0
 
@@ -121,7 +125,8 @@ class Adapter(BaseAdapter):
                     f"Session expired for account {bot.self_id},"
                     " stopping polling. Re-login required.",
                 )
-                self.bot_disconnect(bot)
+                if connected:
+                    self.bot_disconnect(bot)
                 return
 
             except (NetworkError, ActionFailed) as e:
@@ -228,13 +233,14 @@ class Adapter(BaseAdapter):
         timeout_ms: int = 480000,
         _on_refresh: QrRefreshCallback | None = None,
     ) -> WxClawLoginResult:
-        deadline = asyncio.get_event_loop().time() + timeout_ms / 1000
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout_ms / 1000
         current_base_url = base_url
         current_qrcode = qrcode
         qrcode_url = ""
         qr_refresh_count = 0
 
-        while asyncio.get_event_loop().time() < deadline:
+        while loop.time() < deadline:
             status_resp = await self._poll_qr_status(
                 base_url=current_base_url,
                 qrcode=current_qrcode,
@@ -324,7 +330,6 @@ class Adapter(BaseAdapter):
             base_url=result.base_url or base_url,
         )
         bot = Bot(self, result.account_id, account_info)
-        self.bot_connect(bot)
         task = asyncio.create_task(self._start_polling(bot))
         self._tasks.append(task)
         log("INFO", f"Account {result.account_id} logged in via QR")
