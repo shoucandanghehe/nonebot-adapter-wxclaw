@@ -19,6 +19,7 @@ from .event import parse_event
 from .exception import (
     ActionFailed,
     ApiNotAvailable,
+    HTTPStatusError,
     NetworkError,
     SessionExpiredError,
 )
@@ -41,7 +42,7 @@ class Adapter(BaseAdapter):
     def __init__(self, driver: Driver, **kwargs: Any) -> None:
         super().__init__(driver, **kwargs)
         self.adapter_config = get_plugin_config(Config)
-        self._tasks: list[asyncio.Task[None]] = []
+        self._tasks: set[asyncio.Task[None]] = set()
         self.setup()
 
     @classmethod
@@ -60,6 +61,10 @@ class Adapter(BaseAdapter):
         self.on_ready(self._setup)
         self.driver.on_shutdown(self._cleanup)
 
+    def _track_task(self, task: asyncio.Task[None]) -> None:
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
     async def _setup(self) -> None:
         for account in self.adapter_config.wxclaw_accounts:
             if not account.enabled:
@@ -72,15 +77,16 @@ class Adapter(BaseAdapter):
                 )
                 continue
             bot = Bot(self, account.account_id, account)
-            task = asyncio.create_task(self._start_polling(bot))
-            self._tasks.append(task)
+            self._track_task(asyncio.create_task(self._start_polling(bot)))
             log("INFO", f"Started polling for account {account.account_id}")
 
     async def _cleanup(self) -> None:
-        for task in self._tasks:
+        tasks = list(self._tasks)
+        for task in tasks:
             if not task.done():
                 task.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
 
         for bot in list(self.bots.values()):
@@ -92,9 +98,7 @@ class Adapter(BaseAdapter):
             event = parse_event(msg)
             if msg.from_user_id and msg.context_token:
                 bot.update_context_token(msg.from_user_id, msg.context_token)
-            task = asyncio.create_task(handle_event(bot, event))
-            self._tasks.append(task)
-            task.add_done_callback(self._tasks.remove)
+            self._track_task(asyncio.create_task(handle_event(bot, event)))
         except Exception as e:
             log("ERROR", f"Failed to parse event: {e}", e)
 
@@ -111,7 +115,7 @@ class Adapter(BaseAdapter):
 
                 retry_delay = 1.0
 
-                if resp.get_updates_buf:
+                if resp.get_updates_buf is not None:
                     bot.get_updates_buf = resp.get_updates_buf
 
                 for msg in resp.msgs or []:
@@ -127,6 +131,20 @@ class Adapter(BaseAdapter):
                 if bot.self_id in self.bots:
                     self.bot_disconnect(bot)
                 return
+
+            except HTTPStatusError as e:
+                if e.status_code in (401, 403):
+                    log(
+                        "ERROR",
+                        f"Unauthorized ({e.status_code}) for account {bot.self_id},"
+                        " stopping polling. Re-login required.",
+                    )
+                    if bot.self_id in self.bots:
+                        self.bot_disconnect(bot)
+                    return
+                log("ERROR", f"Polling HTTP error: {e}", e)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_retry_delay)
 
             except (NetworkError, ActionFailed) as e:
                 log("ERROR", f"Polling error: {e}", e)
@@ -346,6 +364,5 @@ class Adapter(BaseAdapter):
             base_url=result.base_url or base_url,
         )
         bot = Bot(self, result.account_id, account_info)
-        task = asyncio.create_task(self._start_polling(bot))
-        self._tasks.append(task)
+        self._track_task(asyncio.create_task(self._start_polling(bot)))
         log("INFO", f"Account {result.account_id} logged in via QR")

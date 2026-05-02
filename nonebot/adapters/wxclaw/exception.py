@@ -38,6 +38,9 @@ class ActionFailed(WxClawAdapterException, BaseActionFailed):
         self.ret = ret
         self.errcode = errcode
         self.errmsg = errmsg
+        super().__init__(
+            f"ActionFailed(ret={ret}, errcode={errcode}, errmsg={errmsg!r})",
+        )
 
     @override
     def __repr__(self) -> str:

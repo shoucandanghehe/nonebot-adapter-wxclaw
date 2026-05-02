@@ -1,3 +1,4 @@
+import asyncio
 import base64
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -74,6 +75,16 @@ class UploadResult:
 
 def _generate_client_id() -> str:
     return f"openclaw-weixin:{int(time.time() * 1000)}-{os.urandom(4).hex()}"
+
+
+def _is_timeout_error(exc: BaseException | None) -> bool:
+    while exc is not None:
+        if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+            return True
+        if "timeout" in type(exc).__name__.lower():
+            return True
+        exc = exc.__cause__ or exc.__context__
+    return False
 
 
 class Bot(BaseBot):
@@ -171,7 +182,9 @@ class Bot(BaseBot):
             data = await self._request(request, label="getUpdates")
         except HTTPStatusError:
             raise
-        except NetworkError:
+        except NetworkError as e:
+            if not _is_timeout_error(e.__cause__):
+                raise
             log(
                 "DEBUG",
                 "getUpdates: long-poll timeout, returning empty response",

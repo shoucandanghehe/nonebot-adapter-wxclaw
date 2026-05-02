@@ -103,7 +103,7 @@ class FakeAdapter:
     def __init__(self) -> None:
         self.adapter_config = Config(wxclaw_accounts=[ACCOUNT_INFO])
         self.bots: dict[str, Bot] = {}
-        self._tasks: list[asyncio.Task[None]] = []
+        self._tasks: set[asyncio.Task[None]] = set()
 
     def bot_connect(self, bot: Bot) -> None:
         self.bots[bot.self_id] = bot
@@ -115,6 +115,7 @@ class FakeAdapter:
     _cleanup = Adapter._cleanup
     _dispatch_message = Adapter._dispatch_message
     _start_polling = Adapter._start_polling
+    _track_task = Adapter._track_task
     connect_login_result = Adapter.connect_login_result
 
 
