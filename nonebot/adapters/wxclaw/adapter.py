@@ -61,10 +61,6 @@ class Adapter(BaseAdapter):
         self.on_ready(self._setup)
         self.driver.on_shutdown(self._cleanup)
 
-    def _track_task(self, task: asyncio.Task[None]) -> None:
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-
     async def _setup(self) -> None:
         for account in self.adapter_config.wxclaw_accounts:
             if not account.enabled:
@@ -77,7 +73,9 @@ class Adapter(BaseAdapter):
                 )
                 continue
             bot = Bot(self, account.account_id, account)
-            self._track_task(asyncio.create_task(self._start_polling(bot)))
+            task = asyncio.create_task(self._start_polling(bot))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
             log("INFO", f"Started polling for account {account.account_id}")
 
     async def _cleanup(self) -> None:
@@ -98,7 +96,9 @@ class Adapter(BaseAdapter):
             event = parse_event(msg)
             if msg.from_user_id and msg.context_token:
                 bot.update_context_token(msg.from_user_id, msg.context_token)
-            self._track_task(asyncio.create_task(handle_event(bot, event)))
+            task = asyncio.create_task(handle_event(bot, event))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
         except Exception as e:
             log("ERROR", f"Failed to parse event: {e}", e)
 
@@ -364,5 +364,7 @@ class Adapter(BaseAdapter):
             base_url=result.base_url or base_url,
         )
         bot = Bot(self, result.account_id, account_info)
-        self._track_task(asyncio.create_task(self._start_polling(bot)))
+        task = asyncio.create_task(self._start_polling(bot))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
         log("INFO", f"Account {result.account_id} logged in via QR")

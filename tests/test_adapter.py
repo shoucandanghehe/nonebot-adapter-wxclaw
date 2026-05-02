@@ -115,7 +115,6 @@ class FakeAdapter:
     _cleanup = Adapter._cleanup
     _dispatch_message = Adapter._dispatch_message
     _start_polling = Adapter._start_polling
-    _track_task = Adapter._track_task
     connect_login_result = Adapter.connect_login_result
 
 

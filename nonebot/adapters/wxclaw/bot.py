@@ -77,16 +77,6 @@ def _generate_client_id() -> str:
     return f"openclaw-weixin:{int(time.time() * 1000)}-{os.urandom(4).hex()}"
 
 
-def _is_timeout_error(exc: BaseException | None) -> bool:
-    while exc is not None:
-        if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
-            return True
-        if "timeout" in type(exc).__name__.lower():
-            return True
-        exc = exc.__cause__ or exc.__context__
-    return False
-
-
 class Bot(BaseBot):
     adapter: "Adapter"  # pyright: ignore[reportIncompatibleVariableOverride]
 
@@ -183,7 +173,17 @@ class Bot(BaseBot):
         except HTTPStatusError:
             raise
         except NetworkError as e:
-            if not _is_timeout_error(e.__cause__):
+            cause = e.__cause__
+            is_timeout = False
+            while cause is not None:
+                if isinstance(cause, (TimeoutError, asyncio.TimeoutError)):
+                    is_timeout = True
+                    break
+                if "timeout" in type(cause).__name__.lower():
+                    is_timeout = True
+                    break
+                cause = cause.__cause__ or cause.__context__
+            if not is_timeout:
                 raise
             log(
                 "DEBUG",
