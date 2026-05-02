@@ -1,6 +1,14 @@
-import asyncio
+from asyncio import (
+    CancelledError,
+    Task,
+    TimeoutError as AsyncioTimeoutError,
+    create_task,
+    gather,
+    sleep,
+    wait_for,
+)
 from collections.abc import Awaitable, Callable
-import json
+from json import loads as json_loads
 from typing import Any
 from typing_extensions import override
 from urllib.parse import quote
@@ -42,7 +50,7 @@ class Adapter(BaseAdapter):
     def __init__(self, driver: Driver, **kwargs: Any) -> None:
         super().__init__(driver, **kwargs)
         self.adapter_config = get_plugin_config(Config)
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks: set[Task[None]] = set()
         self.setup()
 
     @classmethod
@@ -73,7 +81,7 @@ class Adapter(BaseAdapter):
                 )
                 continue
             bot = Bot(self, account.account_id, account)
-            task = asyncio.create_task(self._start_polling(bot))
+            task = create_task(self._start_polling(bot))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
             log("INFO", f"Started polling for account {account.account_id}")
@@ -84,7 +92,7 @@ class Adapter(BaseAdapter):
             if not task.done():
                 task.cancel()
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await gather(*tasks, return_exceptions=True)
         self._tasks.clear()
 
         for bot in list(self.bots.values()):
@@ -96,7 +104,7 @@ class Adapter(BaseAdapter):
             event = parse_event(msg)
             if msg.from_user_id and msg.context_token:
                 bot.update_context_token(msg.from_user_id, msg.context_token)
-            task = asyncio.create_task(handle_event(bot, event))
+            task = create_task(handle_event(bot, event))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
         except Exception as e:
@@ -143,20 +151,20 @@ class Adapter(BaseAdapter):
                         self.bot_disconnect(bot)
                     return
                 log("ERROR", f"Polling HTTP error: {e}", e)
-                await asyncio.sleep(retry_delay)
+                await sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
             except (NetworkError, ActionFailed) as e:
                 log("ERROR", f"Polling error: {e}", e)
-                await asyncio.sleep(retry_delay)
+                await sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
-            except asyncio.CancelledError:
+            except CancelledError:
                 return
 
             except Exception as e:
                 log("ERROR", f"Unexpected polling error: {e}", e)
-                await asyncio.sleep(retry_delay)
+                await sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
     @override
@@ -199,7 +207,7 @@ class Adapter(BaseAdapter):
         content = resp.content
         if isinstance(content, str):
             content = content.encode()
-        return type_validate_python(QRCodeResponse, json.loads(content or b"{}"))
+        return type_validate_python(QRCodeResponse, json_loads(content or b"{}"))
 
     async def _poll_qr_status(
         self,
@@ -229,7 +237,7 @@ class Adapter(BaseAdapter):
         content = resp.content
         if isinstance(content, str):
             content = content.encode()
-        return type_validate_python(QRStatusResponse, json.loads(content or b"{}"))
+        return type_validate_python(QRStatusResponse, json_loads(content or b"{}"))
 
     async def start_qr_login(
         self,
@@ -251,7 +259,7 @@ class Adapter(BaseAdapter):
         _on_refresh: QrRefreshCallback | None = None,
     ) -> WxClawLoginResult:
         try:
-            return await asyncio.wait_for(
+            return await wait_for(
                 self._poll_qr_until_done(
                     qrcode=qrcode,
                     base_url=base_url,
@@ -260,7 +268,7 @@ class Adapter(BaseAdapter):
                 ),
                 timeout=timeout_ms / 1000,
             )
-        except asyncio.TimeoutError:
+        except AsyncioTimeoutError:
             return WxClawLoginResult(connected=False, message="Login timed out")
 
     async def _poll_qr_until_done(  # noqa: C901
@@ -284,12 +292,12 @@ class Adapter(BaseAdapter):
             status = status_resp.status
 
             if status == "wait":
-                await asyncio.sleep(1)
+                await sleep(1)
                 continue
 
             if status == "scaned":
                 log("INFO", "QR scanned, waiting for confirmation...")
-                await asyncio.sleep(1)
+                await sleep(1)
                 continue
 
             if status == "confirmed":
@@ -336,10 +344,10 @@ class Adapter(BaseAdapter):
                 if status_resp.redirect_host:
                     current_base_url = f"https://{status_resp.redirect_host}"
                     log("INFO", f"Redirecting polling to {current_base_url}")
-                await asyncio.sleep(1)
+                await sleep(1)
                 continue
 
-            await asyncio.sleep(1)
+            await sleep(1)
 
     def qr_login(
         self,
@@ -364,7 +372,7 @@ class Adapter(BaseAdapter):
             base_url=result.base_url or base_url,
         )
         bot = Bot(self, result.account_id, account_info)
-        task = asyncio.create_task(self._start_polling(bot))
+        task = create_task(self._start_polling(bot))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         log("INFO", f"Account {result.account_id} logged in via QR")

@@ -1,14 +1,14 @@
-import asyncio
-import base64
+from asyncio import TimeoutError as AsyncioTimeoutError
+from base64 import b64encode
 from collections.abc import Callable
 from dataclasses import dataclass
-import hashlib
-import json
-import os
-import time
+from hashlib import md5
+from json import loads as json_loads
+from os import urandom
+from time import time as time_now
 from typing import TYPE_CHECKING, Any, ClassVar
 from typing_extensions import override
-import urllib.parse
+from urllib.parse import quote
 
 from nonebot.adapters import (
     Bot as BaseBot,
@@ -74,7 +74,7 @@ class UploadResult:
 
 
 def _generate_client_id() -> str:
-    return f"openclaw-weixin:{int(time.time() * 1000)}-{os.urandom(4).hex()}"
+    return f"openclaw-weixin:{int(time_now() * 1000)}-{urandom(4).hex()}"
 
 
 class Bot(BaseBot):
@@ -120,7 +120,7 @@ class Bot(BaseBot):
         if isinstance(content, str):
             content = content.encode()
 
-        data = json.loads(content)
+        data = json_loads(content)
         if isinstance(data, dict):
             errcode = data.get("errcode")
             if errcode == -14:
@@ -176,7 +176,7 @@ class Bot(BaseBot):
             cause = e.__cause__
             is_timeout = False
             while cause is not None:
-                if isinstance(cause, (TimeoutError, asyncio.TimeoutError)):
+                if isinstance(cause, (TimeoutError, AsyncioTimeoutError)):
                     is_timeout = True
                     break
                 if "timeout" in type(cause).__name__.lower():
@@ -359,10 +359,10 @@ class Bot(BaseBot):
         to_user_id: str,
     ) -> UploadResult:
         rawsize = len(file_data)
-        rawfilemd5 = hashlib.md5(file_data).hexdigest()  # noqa: S324
+        rawfilemd5 = md5(file_data).hexdigest()  # noqa: S324
         filesize = calculate_ciphertext_size(rawsize)
-        filekey = os.urandom(16).hex()
-        aeskey = os.urandom(16)
+        filekey = urandom(16).hex()
+        aeskey = urandom(16)
 
         req = GetUploadUrlRequest(
             filekey=filekey,
@@ -379,8 +379,8 @@ class Bot(BaseBot):
         cdn_base = self.adapter.adapter_config.wxclaw_cdn_base_url
         upload_url = (upload_resp.upload_full_url or "").strip()
         if not upload_url and upload_resp.upload_param:
-            param = urllib.parse.quote(upload_resp.upload_param, safe="")
-            fk = urllib.parse.quote(filekey, safe="")
+            param = quote(upload_resp.upload_param, safe="")
+            fk = quote(filekey, safe="")
             upload_url = f"{cdn_base}/upload?encrypted_query_param={param}&filekey={fk}"
         if not upload_url:
             msg = "getUploadUrl returned no upload URL"
@@ -399,7 +399,7 @@ class Bot(BaseBot):
             filekey=filekey,
             download_encrypted_query_param=download_param,
             aeskey=aeskey_hex,
-            aes_key_b64=base64.b64encode(aeskey_hex.encode("ascii")).decode("ascii"),
+            aes_key_b64=b64encode(aeskey_hex.encode("ascii")).decode("ascii"),
             file_size=rawsize,
             file_size_ciphertext=filesize,
             file_md5=rawfilemd5,
@@ -409,7 +409,7 @@ class Bot(BaseBot):
         if media.full_url:
             return media.full_url
         cdn_base = self.adapter.adapter_config.wxclaw_cdn_base_url
-        param = urllib.parse.quote(media.encrypt_query_param or "", safe="")
+        param = quote(media.encrypt_query_param or "", safe="")
         return f"{cdn_base}/download?encrypted_query_param={param}"
 
     async def download_media(self, media: CDNMedia) -> bytes:

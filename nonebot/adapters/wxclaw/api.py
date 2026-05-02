@@ -1,5 +1,5 @@
-import base64
-import os
+from base64 import b64encode
+from os import urandom
 from typing import Any
 
 from nonebot.compat import model_dump
@@ -12,8 +12,8 @@ def build_base_info(channel_version: str) -> dict[str, Any]:
 
 
 def _random_wechat_uin() -> str:
-    uint32 = int.from_bytes(os.urandom(4), "big")
-    return base64.b64encode(str(uint32).encode()).decode()
+    uint32 = int.from_bytes(urandom(4), "big")
+    return b64encode(str(uint32).encode()).decode()
 
 
 def _parse_client_version(channel_version: str) -> int:

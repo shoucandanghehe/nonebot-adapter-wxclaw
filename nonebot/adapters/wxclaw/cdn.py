@@ -1,4 +1,4 @@
-import base64
+from base64 import b64decode
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -25,7 +25,7 @@ def calculate_ciphertext_size(plaintext_size: int) -> int:
 
 
 def parse_aes_key(aes_key_base64: str) -> bytes:
-    decoded = base64.b64decode(aes_key_base64)
+    decoded = b64decode(aes_key_base64)
     if len(decoded) == 16:
         return decoded
     if len(decoded) == 32:
