@@ -22,6 +22,7 @@ def make_adapter_with_responses(*responses: dict) -> Adapter:
     adapter._poll_qr_status = Adapter._poll_qr_status.__get__(adapter)
     adapter.start_qr_login = Adapter.start_qr_login.__get__(adapter)
     adapter.wait_qr_login = Adapter.wait_qr_login.__get__(adapter)
+    adapter._poll_qr_until_done = Adapter._poll_qr_until_done.__get__(adapter)
     adapter.qr_login = Adapter.qr_login.__get__(adapter)
     return adapter
 

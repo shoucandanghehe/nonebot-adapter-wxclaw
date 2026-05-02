@@ -224,7 +224,7 @@ class Adapter(BaseAdapter):
         log("INFO", f"QR code fetched, url={qr_resp.qrcode_img_content}")
         return qr_resp.qrcode, qr_resp.qrcode_img_content
 
-    async def wait_qr_login(  # noqa: C901
+    async def wait_qr_login(
         self,
         *,
         qrcode: str,
@@ -233,14 +233,33 @@ class Adapter(BaseAdapter):
         timeout_ms: int = 480000,
         _on_refresh: QrRefreshCallback | None = None,
     ) -> WxClawLoginResult:
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + timeout_ms / 1000
+        try:
+            return await asyncio.wait_for(
+                self._poll_qr_until_done(
+                    qrcode=qrcode,
+                    base_url=base_url,
+                    bot_type=bot_type,
+                    _on_refresh=_on_refresh,
+                ),
+                timeout=timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError:
+            return WxClawLoginResult(connected=False, message="Login timed out")
+
+    async def _poll_qr_until_done(  # noqa: C901
+        self,
+        *,
+        qrcode: str,
+        base_url: str,
+        bot_type: str,
+        _on_refresh: QrRefreshCallback | None,
+    ) -> WxClawLoginResult:
         current_base_url = base_url
         current_qrcode = qrcode
         qrcode_url = ""
         qr_refresh_count = 0
 
-        while loop.time() < deadline:
+        while True:
             status_resp = await self._poll_qr_status(
                 base_url=current_base_url,
                 qrcode=current_qrcode,
@@ -304,8 +323,6 @@ class Adapter(BaseAdapter):
                 continue
 
             await asyncio.sleep(1)
-
-        return WxClawLoginResult(connected=False, message="Login timed out")
 
     def qr_login(
         self,
