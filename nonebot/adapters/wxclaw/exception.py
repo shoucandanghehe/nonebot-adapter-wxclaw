@@ -21,6 +21,12 @@ class NetworkError(WxClawAdapterException, BaseNetworkError):
     pass
 
 
+class HTTPStatusError(NetworkError):
+    def __init__(self, status_code: int, label: str) -> None:
+        super().__init__(f"{label} HTTP {status_code}")
+        self.status_code = status_code
+
+
 class ActionFailed(WxClawAdapterException, BaseActionFailed):
     def __init__(
         self,

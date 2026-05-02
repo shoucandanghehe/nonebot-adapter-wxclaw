@@ -12,6 +12,7 @@ from nonebot.adapters.wxclaw.models import (
     UploadMediaType,
     WeixinMessage,
 )
+from nonebot.adapters.wxclaw.utils import API
 
 from nonebug import App
 import pytest
@@ -24,6 +25,26 @@ def account_info() -> WxClawAccountInfo:
         token="test-token",
         base_url="https://test.weixin.qq.com",
     )
+
+
+class TestApiDescriptor:
+    def test_class_access_returns_api_instance(self) -> None:
+        assert isinstance(Bot.__dict__["get_updates"], API)
+        assert isinstance(Bot.__dict__["send_message"], API)
+        assert isinstance(Bot.__dict__["send_typing"], API)
+        assert isinstance(Bot.__dict__["get_config"], API)
+        assert isinstance(Bot.__dict__["get_upload_url"], API)
+
+    def test_instance_access_returns_callable(
+        self,
+        account_info: WxClawAccountInfo,
+    ) -> None:
+        adapter = AsyncMock()
+        adapter.adapter_config = Config()
+        bot = Bot(adapter, "test-bot", account_info)
+        # Instance access should return a callable (partial of call_api)
+        assert callable(bot.get_updates)
+        assert callable(bot.send_message)
 
 
 class TestBot:
@@ -187,9 +208,64 @@ class TestBotHelpers:
         with pytest.raises(NetworkError, match="refused"):
             await bot._request(request, label="test")
 
-    def test_getattr_raises(self, bot: Bot) -> None:
-        with pytest.raises(AttributeError, match="no API named"):
-            bot.nonexistent_api()
+
+class TestBuildOutgoingMsg:
+    @pytest.fixture
+    def bot(self, account_info: WxClawAccountInfo) -> Bot:
+        adapter = AsyncMock()
+        adapter.adapter_config = Config()
+        bot = Bot(adapter, "test-bot", account_info)
+        bot.update_context_token("user1", "cached-ct")
+        return bot
+
+    def test_basic_fields(self, bot: Bot) -> None:
+        from nonebot.adapters.wxclaw.models import MessageItem, TextItem
+
+        items = [MessageItem(type=MessageItemType.TEXT, text_item=TextItem(text="hi"))]
+        msg = bot._build_outgoing_msg("user1", items, context_token="explicit-ct")
+
+        assert msg.from_user_id == ""
+        assert msg.to_user_id == "user1"
+        assert msg.message_type == MessageType.BOT
+        assert msg.message_state == MessageState.FINISH
+        assert msg.context_token == "explicit-ct"
+        assert msg.session_id == "user1"
+        assert msg.client_id is not None
+        assert msg.client_id.startswith("openclaw-weixin:")
+
+    def test_falls_back_to_cached_context_token(self, bot: Bot) -> None:
+        msg = bot._build_outgoing_msg("user1", [])
+        assert msg.context_token == "cached-ct"
+
+    def test_session_id_defaults_to_user_id(self, bot: Bot) -> None:
+        msg = bot._build_outgoing_msg("user1", [])
+        assert msg.session_id == "user1"
+
+    def test_explicit_session_id(self, bot: Bot) -> None:
+        msg = bot._build_outgoing_msg("user1", [], session_id="custom-session")
+        assert msg.session_id == "custom-session"
+
+
+class TestSendText:
+    @pytest.mark.asyncio
+    async def test_send_text(self, account_info: WxClawAccountInfo) -> None:
+        adapter = AsyncMock()
+        adapter.adapter_config = Config()
+        bot = Bot(adapter, "test-bot", account_info)
+        bot.update_context_token("user1", "ct1")
+        bot.send_message = AsyncMock()  # type: ignore[method-assign]
+
+        await bot.send_text("user1", "hello world")
+
+        bot.send_message.assert_called_once()
+        msg: WeixinMessage = bot.send_message.call_args[1]["msg"]
+        assert msg.to_user_id == "user1"
+        assert msg.context_token == "ct1"
+        assert msg.item_list is not None
+        assert len(msg.item_list) == 1
+        assert msg.item_list[0].type == MessageItemType.TEXT
+        assert msg.item_list[0].text_item is not None
+        assert msg.item_list[0].text_item.text == "hello world"
 
 
 class TestSendMedia:

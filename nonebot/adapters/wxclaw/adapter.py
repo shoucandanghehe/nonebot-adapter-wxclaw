@@ -94,21 +94,20 @@ class Adapter(BaseAdapter):
                 bot.update_context_token(msg.from_user_id, msg.context_token)
             task = asyncio.create_task(handle_event(bot, event))
             self._tasks.append(task)
+            task.add_done_callback(self._tasks.remove)
         except Exception as e:
             log("ERROR", f"Failed to parse event: {e}", e)
 
     async def _start_polling(self, bot: Bot) -> None:
         retry_delay = 1.0
         max_retry_delay = 60.0
-        connected = False
 
         while True:
             try:
                 resp = await bot.get_updates()
 
-                if not connected:
+                if bot.self_id not in self.bots:
                     self.bot_connect(bot)
-                    connected = True
 
                 retry_delay = 1.0
 
@@ -125,7 +124,7 @@ class Adapter(BaseAdapter):
                     f"Session expired for account {bot.self_id},"
                     " stopping polling. Re-login required.",
                 )
-                if connected:
+                if bot.self_id in self.bots:
                     self.bot_disconnect(bot)
                 return
 
@@ -206,7 +205,7 @@ class Adapter(BaseAdapter):
             return QRStatusResponse(status="wait")
 
         if resp.status_code != 200:
-            log("DEBUG", "pollQRStatus: timeout/network error, returning wait status")
+            log("DEBUG", f"pollQRStatus: HTTP {resp.status_code}, returning wait status")
             return QRStatusResponse(status="wait")
 
         content = resp.content

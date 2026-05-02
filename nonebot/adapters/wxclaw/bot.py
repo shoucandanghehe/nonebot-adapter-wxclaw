@@ -5,7 +5,7 @@ import hashlib
 import json
 import os
 import time
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn
+from typing import TYPE_CHECKING, Any, ClassVar
 from typing_extensions import override
 import urllib.parse
 
@@ -28,7 +28,12 @@ from .cdn import (
 )
 from .config import WxClawAccountInfo
 from .event import Event
-from .exception import ActionFailed, NetworkError, SessionExpiredError
+from .exception import (
+    ActionFailed,
+    HTTPStatusError,
+    NetworkError,
+    SessionExpiredError,
+)
 from .log import log
 from .message import Message, MessageSegment, message_to_item_list
 from .models import (
@@ -86,11 +91,6 @@ class Bot(BaseBot):
         self.context_tokens: dict[str, str] = {}
         self.get_updates_buf: str = ""
 
-    @override
-    def __getattr__(self, name: str) -> NoReturn:
-        msg = f"{self.__class__.__name__} has no API named {name!r}"
-        raise AttributeError(msg)
-
     def update_context_token(self, user_id: str, context_token: str) -> None:
         if context_token:
             self.context_tokens[user_id] = context_token
@@ -111,16 +111,13 @@ class Bot(BaseBot):
 
     def _handle_response(self, response: Response, label: str) -> Any:
         if response.status_code != 200:
-            msg = f"{label} HTTP {response.status_code}"
-            raise NetworkError(msg)
+            raise HTTPStatusError(response.status_code, label)
 
         content = response.content
-        if content is None:
+        if not content:
             return None
         if isinstance(content, str):
             content = content.encode()
-        if not content:
-            return None
 
         data = json.loads(content)
         if isinstance(data, dict):
@@ -172,10 +169,12 @@ class Bot(BaseBot):
         )
         try:
             data = await self._request(request, label="getUpdates")
+        except HTTPStatusError:
+            raise
         except NetworkError:
             log(
                 "DEBUG",
-                "getUpdates: timeout or network error, returning empty response",
+                "getUpdates: long-poll timeout, returning empty response",
             )
             return GetUpdatesResponse(
                 ret=0,
