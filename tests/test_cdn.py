@@ -1,12 +1,17 @@
 import os
+from unittest.mock import AsyncMock
 
+from nonebot.adapters.wxclaw.bot import Bot
 from nonebot.adapters.wxclaw.cdn import (
     aes_ecb_decrypt,
     aes_ecb_encrypt,
     calculate_ciphertext_size,
     parse_aes_key,
 )
+from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
+from nonebot.adapters.wxclaw.exception import NetworkError
 
+from nonebot.drivers import Response
 import pytest
 
 
@@ -88,46 +93,28 @@ class TestParseAesKey:
             parse_aes_key(invalid)
 
 
+@pytest.fixture
+def bot() -> Bot:
+    adapter = AsyncMock()
+    adapter.adapter_config = Config()
+    return Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
+
+
 class TestUploadToCdn:
     @pytest.mark.asyncio
-    async def test_upload_success(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
-
-        from nonebot.drivers import Response
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(
-            return_value=Response(
-                200,
-                headers={"x-encrypted-param": "enc_param_123"},
-            )
+    async def test_success(self, bot: Bot) -> None:
+        bot.adapter.request = AsyncMock(
+            return_value=Response(200, headers={"x-encrypted-param": "enc_123"}),
         )
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
         result = await bot.upload_to_cdn(
             upload_url="https://cdn.example.com/upload",
             encrypted_data=b"encrypted",
         )
-        assert result == "enc_param_123"
-        adapter.request.assert_called_once()
+        assert result == "enc_123"
 
     @pytest.mark.asyncio
-    async def test_upload_client_error(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
-        from nonebot.adapters.wxclaw.exception import NetworkError
-
-        from nonebot.drivers import Response
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(return_value=Response(400))
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
+    async def test_client_error_no_retry(self, bot: Bot) -> None:
+        bot.adapter.request = AsyncMock(return_value=Response(400))
         with pytest.raises(NetworkError, match="client error"):
             await bot.upload_to_cdn(
                 upload_url="https://cdn.example.com/upload",
@@ -136,19 +123,8 @@ class TestUploadToCdn:
             )
 
     @pytest.mark.asyncio
-    async def test_upload_missing_param_header(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
-        from nonebot.adapters.wxclaw.exception import NetworkError
-
-        from nonebot.drivers import Response
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(return_value=Response(200, headers={}))
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
+    async def test_missing_param_header(self, bot: Bot) -> None:
+        bot.adapter.request = AsyncMock(return_value=Response(200, headers={}))
         with pytest.raises(NetworkError, match="missing x-encrypted-param"):
             await bot.upload_to_cdn(
                 upload_url="https://cdn.example.com/upload",
@@ -157,73 +133,43 @@ class TestUploadToCdn:
             )
 
     @pytest.mark.asyncio
-    async def test_upload_retry_on_server_error(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
-
-        from nonebot.drivers import Response
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(
+    async def test_retry_on_server_error(self, bot: Bot) -> None:
+        bot.adapter.request = AsyncMock(
             side_effect=[
                 Response(500),
-                Response(
-                    200,
-                    headers={"x-encrypted-param": "ok"},
-                ),
-            ]
+                Response(200, headers={"x-encrypted-param": "ok"}),
+            ],
         )
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
         result = await bot.upload_to_cdn(
             upload_url="https://cdn.example.com/upload",
             encrypted_data=b"data",
             max_retries=2,
         )
         assert result == "ok"
-        assert adapter.request.call_count == 2
+        assert bot.adapter.request.call_count == 2
 
 
 class TestDownloadFromCdn:
     @pytest.mark.asyncio
-    async def test_download_and_decrypt(self) -> None:
+    async def test_download_and_decrypt(self, bot: Bot) -> None:
         import base64
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
 
         key = os.urandom(16)
         plaintext = b"hello world data"
         encrypted = aes_ecb_encrypt(plaintext, key)
 
-        from nonebot.drivers import Response
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(return_value=Response(200, content=encrypted))
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
-        aes_key_b64 = base64.b64encode(key).decode()
-
+        bot.adapter.request = AsyncMock(
+            return_value=Response(200, content=encrypted),
+        )
         result = await bot.download_from_cdn(
-            url="https://cdn.example.com/file", aes_key_base64=aes_key_b64
+            url="https://cdn.example.com/file",
+            aes_key_base64=base64.b64encode(key).decode(),
         )
         assert result == plaintext
 
     @pytest.mark.asyncio
-    async def test_download_network_error(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
-        from nonebot.adapters.wxclaw.exception import NetworkError
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(side_effect=ConnectionError("timeout"))
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
+    async def test_network_error(self, bot: Bot) -> None:
+        bot.adapter.request = AsyncMock(side_effect=ConnectionError("timeout"))
         with pytest.raises(NetworkError, match="timeout"):
             await bot.download_from_cdn(
                 url="https://cdn.example.com/file",
@@ -231,19 +177,8 @@ class TestDownloadFromCdn:
             )
 
     @pytest.mark.asyncio
-    async def test_download_http_error(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
-        from nonebot.adapters.wxclaw.exception import NetworkError
-
-        from nonebot.drivers import Response
-
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        adapter.request = AsyncMock(return_value=Response(404))
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
+    async def test_http_error(self, bot: Bot) -> None:
+        bot.adapter.request = AsyncMock(return_value=Response(404))
         with pytest.raises(NetworkError, match="404"):
             await bot.download_from_cdn(
                 url="https://cdn.example.com/file",
@@ -253,23 +188,14 @@ class TestDownloadFromCdn:
 
 class TestPrepareAndUploadFile:
     @pytest.mark.asyncio
-    async def test_full_flow(self) -> None:
-        from unittest.mock import AsyncMock
-
-        from nonebot.adapters.wxclaw.bot import Bot
-        from nonebot.adapters.wxclaw.config import Config, WxClawAccountInfo
+    async def test_full_flow(self, bot: Bot) -> None:
         from nonebot.adapters.wxclaw.models import GetUploadUrlResponse, UploadMediaType
 
-        adapter = AsyncMock()
-        adapter.adapter_config = Config()
-        bot = Bot(adapter, "test", WxClawAccountInfo(account_id="test", token="tok"))
-
-        # Mock @API-decorated get_upload_url (bypasses call_api dispatch)
         bot.get_upload_url = AsyncMock(
             return_value=GetUploadUrlResponse(
                 upload_param="param123",
                 upload_full_url="https://cdn.example.com/upload?key=abc",
-            )
+            ),
         )
         bot.upload_to_cdn = AsyncMock(return_value="download_param_xyz")
 
@@ -283,5 +209,6 @@ class TestPrepareAndUploadFile:
         assert result.download_encrypted_query_param == "download_param_xyz"
         assert result.aeskey
         assert result.file_size == len(b"test file content")
+        assert result.file_md5
         bot.get_upload_url.assert_called_once()
         bot.upload_to_cdn.assert_called_once()
