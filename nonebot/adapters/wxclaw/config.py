@@ -15,3 +15,4 @@ class Config(BaseModel):
     wxclaw_long_poll_timeout: int = 35000
     wxclaw_api_timeout: int = 15000
     wxclaw_cdn_base_url: str = "https://novac2c.cdn.weixin.qq.com/c2c"
+    wxclaw_bot_agent: str = ""

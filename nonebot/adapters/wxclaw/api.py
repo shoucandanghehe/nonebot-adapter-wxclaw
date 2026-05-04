@@ -6,9 +6,12 @@ from nonebot.compat import model_dump
 
 from .models import BaseInfo
 
+DEFAULT_BOT_AGENT = "OpenClaw"
 
-def build_base_info(channel_version: str) -> dict[str, Any]:
-    return model_dump(BaseInfo(channel_version=channel_version))
+
+def build_base_info(channel_version: str, bot_agent: str = "") -> dict[str, Any]:
+    agent = bot_agent.strip() if bot_agent else DEFAULT_BOT_AGENT
+    return model_dump(BaseInfo(channel_version=channel_version, bot_agent=agent))
 
 
 def _random_wechat_uin() -> str:

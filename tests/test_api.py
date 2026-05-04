@@ -56,6 +56,22 @@ class TestBuildBaseInfo:
         info = build_base_info("2.1.1")
         assert info["channel_version"] == "2.1.1"
 
+    def test_default_bot_agent(self) -> None:
+        info = build_base_info("2.4.1")
+        assert info["bot_agent"] == "OpenClaw"
+
+    def test_custom_bot_agent(self) -> None:
+        info = build_base_info("2.4.1", "MyBot/1.0")
+        assert info["bot_agent"] == "MyBot/1.0"
+
+    def test_bot_agent_strip(self) -> None:
+        info = build_base_info("2.4.1", "  MyBot/1.0  ")
+        assert info["bot_agent"] == "MyBot/1.0"
+
+    def test_empty_bot_agent_falls_back(self) -> None:
+        info = build_base_info("2.4.1", "")
+        assert info["bot_agent"] == "OpenClaw"
+
 
 class TestParseClientVersion:
     @pytest.mark.parametrize(
