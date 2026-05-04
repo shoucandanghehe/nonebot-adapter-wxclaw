@@ -160,6 +160,7 @@ class Bot(BaseBot):
             "get_updates_buf": self.get_updates_buf,
             "base_info": build_base_info(
                 self.adapter.adapter_config.wxclaw_channel_version,
+                self.adapter.adapter_config.wxclaw_bot_agent,
             ),
         }
         request = Request(
@@ -202,6 +203,7 @@ class Bot(BaseBot):
         body = model_dump(SendMessageRequest(msg=msg), exclude_none=True)
         body["base_info"] = build_base_info(
             self.adapter.adapter_config.wxclaw_channel_version,
+            self.adapter.adapter_config.wxclaw_bot_agent,
         )
         log("TRACE", f"sendMessage body: {body}")
         request = Request(
@@ -228,6 +230,7 @@ class Bot(BaseBot):
         body = model_dump(req, exclude_none=True)
         body["base_info"] = build_base_info(
             self.adapter.adapter_config.wxclaw_channel_version,
+            self.adapter.adapter_config.wxclaw_bot_agent,
         )
         request = Request(
             "POST",
@@ -250,6 +253,7 @@ class Bot(BaseBot):
             "context_token": ct,
             "base_info": build_base_info(
                 self.adapter.adapter_config.wxclaw_channel_version,
+                self.adapter.adapter_config.wxclaw_bot_agent,
             ),
         }
         request = Request(
@@ -270,6 +274,7 @@ class Bot(BaseBot):
         body = model_dump(req, exclude_none=True)
         body["base_info"] = build_base_info(
             self.adapter.adapter_config.wxclaw_channel_version,
+            self.adapter.adapter_config.wxclaw_bot_agent,
         )
         request = Request(
             "POST",

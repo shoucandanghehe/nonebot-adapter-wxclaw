@@ -49,6 +49,7 @@ class UploadMediaType(IntEnum):
 
 class BaseInfo(_BaseModel):
     channel_version: str | None = None
+    bot_agent: str | None = None
 
 
 class CDNMedia(_BaseModel):

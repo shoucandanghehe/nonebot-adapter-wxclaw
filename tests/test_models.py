@@ -1,4 +1,5 @@
 from nonebot.adapters.wxclaw.models import (
+    BaseInfo,
     CDNMedia,
     FileItem,
     GetUpdatesResponse,
@@ -75,6 +76,12 @@ class TestModels:
     def test_video_item(self) -> None:
         item = VideoItem(video_size=2048, play_length=60)
         assert item.play_length == 60
+
+    def test_base_info(self) -> None:
+        info = BaseInfo(channel_version="2.4.1", bot_agent="MyBot/1.0")
+        d = model_dump(info)
+        assert d["channel_version"] == "2.4.1"
+        assert d["bot_agent"] == "MyBot/1.0"
 
     def test_message_item_with_ref(self) -> None:
         ref = RefMessage(
