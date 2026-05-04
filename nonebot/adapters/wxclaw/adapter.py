@@ -20,7 +20,7 @@ from nonebot.compat import model_dump, type_validate_python
 from nonebot.drivers import Driver, HTTPClientMixin, Request
 from nonebot.message import handle_event
 
-from .api import build_get_headers
+from .api import build_get_headers, build_headers
 from .bot import Bot
 from .config import Config, WxClawAccountInfo
 from .event import parse_event
@@ -187,12 +187,31 @@ class Adapter(BaseAdapter):
     ) -> QRCodeResponse:
         endpoint = f"ilink/bot/get_bot_qrcode?bot_type={bot_type}"
         url = f"{base_url.rstrip('/')}/{endpoint}"
-        headers = build_get_headers(
+        headers = build_headers(
+            token="",
             app_id=self.adapter_config.wxclaw_ilink_app_id,
             channel_version=self.adapter_config.wxclaw_channel_version,
         )
-        request = Request("GET", url, headers=headers, timeout=5.0)
-        log("DEBUG", f"fetchQRCode: GET {url}")
+
+        local_token_list: list[str] = []
+        for bot in list(self.bots.values()):
+            if not isinstance(bot, Bot):
+                continue
+            token = bot.account_info.token.strip()
+            if token:
+                local_token_list.append(token)
+                if len(local_token_list) >= 10:
+                    break
+
+        body = {"local_token_list": local_token_list}
+        request = Request(
+            "POST",
+            url,
+            headers=headers,
+            json=body,
+            timeout=self.adapter_config.wxclaw_api_timeout / 1000,
+        )
+        log("DEBUG", f"fetchQRCode: POST {url}")
 
         try:
             resp = await self.request(request)

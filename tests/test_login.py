@@ -12,6 +12,7 @@ def make_adapter_with_responses(*responses: dict) -> Adapter:
     """Create a mock adapter with pre-configured HTTP responses."""
     adapter = AsyncMock(spec=Adapter)
     adapter.adapter_config = Config()
+    adapter.bots = {}
     adapter.request = AsyncMock(
         side_effect=[
             Response(status_code=200, content=json.dumps(r).encode()) for r in responses
@@ -36,6 +37,31 @@ class TestStartQrLogin:
         qrcode, qrcode_url = await adapter.start_qr_login()
         assert qrcode == "qr123"
         assert qrcode_url == "https://qr/img"
+        # 验证请求是 POST 且 body 含 local_token_list
+        req = adapter.request.call_args.args[0]
+        assert req.method == "POST"
+        assert req.json is not None
+        assert "local_token_list" in req.json
+        assert req.json["local_token_list"] == []
+
+    @pytest.mark.asyncio
+    async def test_post_with_local_tokens(self) -> None:
+        """已有连接 bot 时,local_token_list 应包含其 token"""
+        from nonebot.adapters.wxclaw.bot import Bot
+        from nonebot.adapters.wxclaw.config import WxClawAccountInfo
+
+        adapter = make_adapter_with_responses(
+            {"qrcode": "qr123", "qrcode_img_content": "https://qr/img"}
+        )
+        bot = AsyncMock(spec=Bot)
+        bot.account_info = WxClawAccountInfo(
+            account_id="b1", token="tok1", base_url="https://api"
+        )
+        adapter.bots = {"b1": bot}
+        await adapter.start_qr_login()
+        req = adapter.request.call_args.args[0]
+        assert req.method == "POST"
+        assert req.json == {"local_token_list": ["tok1"]}
 
 
 class TestWaitQrLogin:
