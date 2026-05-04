@@ -185,3 +185,132 @@ class TestQrLogin:
             assert session.qrcode == "qr2"
             assert session.qrcode_url == "https://qr/2"
         assert result.connected
+
+
+class TestQrNewStatuses:
+    @pytest.mark.asyncio
+    async def test_need_verifycode_with_callback(self) -> None:
+        """提供回调时,need_verifycode 后携带 verify_code 继续轮询"""
+        adapter = make_adapter_with_responses(
+            {"status": "need_verifycode"},
+            # 携带 verify_code 后服务端返回 scaned（验证通过）
+            {"status": "scaned"},
+            # 确认登录
+            {
+                "status": "confirmed",
+                "bot_token": "tok",
+                "ilink_bot_id": "b1",
+                "baseurl": "https://api",
+                "ilink_user_id": "u1",
+            },
+        )
+        callback = AsyncMock(return_value="1234")
+        result = await adapter.wait_qr_login(
+            qrcode="qr1",
+            timeout_ms=5000,
+            _verify_code_callback=callback,
+        )
+        assert result.connected
+        callback.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_need_verifycode_no_callback(self) -> None:
+        """无回调时返回 need_verify_code=True"""
+        adapter = make_adapter_with_responses({"status": "need_verifycode"})
+        result = await adapter.wait_qr_login(qrcode="qr1", timeout_ms=5000)
+        assert not result.connected
+        assert result.need_verify_code
+
+    @pytest.mark.asyncio
+    async def test_verify_code_blocked_refreshes(self) -> None:
+        """verify_code_blocked 触发二维码刷新"""
+        adapter = make_adapter_with_responses(
+            {"status": "verify_code_blocked"},
+            # 刷新二维码
+            {"qrcode": "qr2", "qrcode_img_content": "https://qr/2"},
+            # 确认登录
+            {
+                "status": "confirmed",
+                "bot_token": "tok",
+                "ilink_bot_id": "b1",
+                "baseurl": "https://api",
+                "ilink_user_id": "u1",
+            },
+        )
+        result = await adapter.wait_qr_login(qrcode="qr1", timeout_ms=10000)
+        assert result.connected
+        assert result.account_id == "b1"
+
+    @pytest.mark.asyncio
+    async def test_verify_code_blocked_max_refresh(self) -> None:
+        """verify_code_blocked 达到刷新上限后停止"""
+        from nonebot.adapters.wxclaw.login import MAX_QR_REFRESH_COUNT
+
+        responses: list[dict] = []
+        for _ in range(MAX_QR_REFRESH_COUNT):
+            responses.append({"status": "verify_code_blocked"})
+            responses.append({"qrcode": "qr_new", "qrcode_img_content": "https://qr/new"})
+        adapter = make_adapter_with_responses(*responses)
+        result = await adapter.wait_qr_login(qrcode="qr1", timeout_ms=10000)
+        assert not result.connected
+        assert "错误" in result.message
+
+    @pytest.mark.asyncio
+    async def test_binded_redirect(self) -> None:
+        """binded_redirect 直接返回未连接"""
+        adapter = make_adapter_with_responses({"status": "binded_redirect"})
+        result = await adapter.wait_qr_login(qrcode="qr1", timeout_ms=5000)
+        assert not result.connected
+        assert "已绑定" in result.message
+
+    @pytest.mark.asyncio
+    async def test_verify_code_passed_to_poll(self) -> None:
+        """verify_code 应作为查询参数传递给 pollQRStatus"""
+        adapter = make_adapter_with_responses(
+            {"status": "need_verifycode"},
+            # 返回 confirmed（模拟验证后直接通过）
+            {
+                "status": "confirmed",
+                "bot_token": "tok",
+                "ilink_bot_id": "b1",
+                "baseurl": "https://api",
+                "ilink_user_id": "u1",
+            },
+        )
+        callback = AsyncMock(return_value="5678")
+        result = await adapter.wait_qr_login(
+            qrcode="qr1",
+            timeout_ms=5000,
+            _verify_code_callback=callback,
+        )
+        assert result.connected
+        # 第二次 request 调用（pollQRStatus）应包含 verify_code 参数
+        second_call = adapter.request.call_args_list[1]
+        req = second_call.args[0]
+        assert "verify_code=5678" in str(req.url)
+
+    @pytest.mark.asyncio
+    async def test_qr_login_session_with_verify_callback(self) -> None:
+        """QrLoginSession 应透传 verify_code_callback"""
+        adapter = make_adapter_with_responses(
+            # fetch QR
+            {"qrcode": "qr1", "qrcode_img_content": "https://qr/img"},
+            # need_verifycode
+            {"status": "need_verifycode"},
+            # confirmed after verify
+            {
+                "status": "confirmed",
+                "bot_token": "tok",
+                "ilink_bot_id": "b1",
+                "baseurl": "https://api",
+                "ilink_user_id": "u1",
+            },
+        )
+        callback = AsyncMock(return_value="9999")
+        async with adapter.qr_login(
+            timeout_ms=5000, verify_code_callback=callback
+        ) as session:
+            assert session.qrcode == "qr1"
+            result = await session.wait()
+        assert result.connected
+        callback.assert_called_once()

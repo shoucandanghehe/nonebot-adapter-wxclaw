@@ -37,6 +37,7 @@ from .login import (
     FIXED_BASE_URL,
     MAX_QR_REFRESH_COUNT,
     QrLoginSession,
+    VerifyCodeCallback,
     WxClawLoginResult,
 )
 from .models import MessageType, QRCodeResponse, QRStatusResponse, WeixinMessage
@@ -249,8 +250,11 @@ class Adapter(BaseAdapter):
         *,
         base_url: str = FIXED_BASE_URL,
         qrcode: str,
+        verify_code: str = "",
     ) -> QRStatusResponse:
         endpoint = f"ilink/bot/get_qrcode_status?qrcode={quote(qrcode)}"
+        if verify_code:
+            endpoint += f"&verify_code={quote(verify_code)}"
         url = f"{base_url.rstrip('/')}/{endpoint}"
         headers = build_get_headers(
             app_id=self.adapter_config.wxclaw_ilink_app_id,
@@ -292,6 +296,7 @@ class Adapter(BaseAdapter):
         bot_type: str = DEFAULT_BOT_TYPE,
         timeout_ms: int = 480000,
         _on_refresh: QrRefreshCallback | None = None,
+        _verify_code_callback: VerifyCodeCallback | None = None,
     ) -> WxClawLoginResult:
         try:
             return await wait_for(
@@ -300,6 +305,7 @@ class Adapter(BaseAdapter):
                     base_url=base_url,
                     bot_type=bot_type,
                     _on_refresh=_on_refresh,
+                    _verify_code_callback=_verify_code_callback,
                 ),
                 timeout=timeout_ms / 1000,
             )
@@ -313,16 +319,19 @@ class Adapter(BaseAdapter):
         base_url: str,
         bot_type: str,
         _on_refresh: QrRefreshCallback | None,
+        _verify_code_callback: VerifyCodeCallback | None = None,
     ) -> WxClawLoginResult:
         current_base_url = base_url
         current_qrcode = qrcode
         qrcode_url = ""
         qr_refresh_count = 0
+        pending_verify_code = ""
 
         while True:
             status_resp = await self._poll_qr_status(
                 base_url=current_base_url,
                 qrcode=current_qrcode,
+                verify_code=pending_verify_code,
             )
             status = status_resp.status
 
@@ -331,6 +340,9 @@ class Adapter(BaseAdapter):
                 continue
 
             if status == "scaned":
+                if pending_verify_code:
+                    log("INFO", "Verify code accepted")
+                    pending_verify_code = ""
                 log("INFO", "QR scanned, waiting for confirmation...")
                 await sleep(1)
                 continue
@@ -382,6 +394,45 @@ class Adapter(BaseAdapter):
                 await sleep(1)
                 continue
 
+            if status == "need_verifycode":
+                if _verify_code_callback is None:
+                    return WxClawLoginResult(
+                        connected=False,
+                        need_verify_code=True,
+                        message="需要输入手机微信显示的配对数字，"
+                        "但未提供 verify_code_callback",
+                    )
+                code = await _verify_code_callback()
+                pending_verify_code = code.strip()
+                continue
+
+            if status == "verify_code_blocked":
+                pending_verify_code = ""
+                qr_refresh_count += 1
+                if qr_refresh_count >= MAX_QR_REFRESH_COUNT:
+                    return WxClawLoginResult(
+                        connected=False,
+                        message="多次输入错误，连接流程已停止",
+                    )
+                log(
+                    "INFO",
+                    f"Verify code blocked, refreshing QR"
+                    f" ({qr_refresh_count}/{MAX_QR_REFRESH_COUNT})",
+                )
+                current_qrcode, qrcode_url = await self.start_qr_login(
+                    base_url=base_url,
+                    bot_type=bot_type,
+                )
+                if _on_refresh is not None:
+                    await _on_refresh(current_qrcode, qrcode_url)
+                continue
+
+            if status == "binded_redirect":
+                return WxClawLoginResult(
+                    connected=False,
+                    message="该微信已绑定此实例，无需重复连接",
+                )
+
             await sleep(1)
 
     def qr_login(
@@ -391,6 +442,7 @@ class Adapter(BaseAdapter):
         bot_type: str = DEFAULT_BOT_TYPE,
         timeout_ms: int = 480000,
         auto_connect: bool = False,
+        verify_code_callback: VerifyCodeCallback | None = None,
     ) -> QrLoginSession:
         return QrLoginSession(
             _adapter=self,
@@ -398,6 +450,7 @@ class Adapter(BaseAdapter):
             _bot_type=bot_type,
             _timeout_ms=timeout_ms,
             _auto_connect=auto_connect,
+            _verify_code_callback=verify_code_callback,
         )
 
     def connect_login_result(self, result: WxClawLoginResult, base_url: str) -> None:

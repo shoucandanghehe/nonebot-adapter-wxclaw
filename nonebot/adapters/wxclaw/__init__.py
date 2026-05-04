@@ -19,6 +19,7 @@ from .exception import (
 )
 from .login import (
     QrLoginSession as QrLoginSession,
+    VerifyCodeCallback as VerifyCodeCallback,
     WxClawLoginResult as WxClawLoginResult,
 )
 from .message import Message as Message, MessageSegment as MessageSegment

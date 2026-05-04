@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from typing_extensions import Self
@@ -11,6 +12,8 @@ FIXED_BASE_URL = "https://ilinkai.weixin.qq.com"
 DEFAULT_BOT_TYPE = "3"
 MAX_QR_REFRESH_COUNT = 3
 
+VerifyCodeCallback = Callable[[], Awaitable[str]]
+
 
 @dataclass
 class WxClawLoginResult:
@@ -21,6 +24,7 @@ class WxClawLoginResult:
     user_id: str = ""
     qrcode_url: str = ""
     message: str = ""
+    need_verify_code: bool = False
 
 
 @dataclass
@@ -30,6 +34,7 @@ class QrLoginSession:
     _bot_type: str = DEFAULT_BOT_TYPE
     _timeout_ms: int = 480000
     _auto_connect: bool = False
+    _verify_code_callback: VerifyCodeCallback | None = None
 
     qrcode: str = ""
     qrcode_url: str = ""
@@ -55,6 +60,7 @@ class QrLoginSession:
             bot_type=self._bot_type,
             timeout_ms=self._timeout_ms,
             _on_refresh=_on_refresh,
+            _verify_code_callback=self._verify_code_callback,
         )
         result.qrcode_url = self.qrcode_url
 
