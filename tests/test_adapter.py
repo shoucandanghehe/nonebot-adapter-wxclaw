@@ -334,3 +334,44 @@ class TestConnectLoginResult:
         adapter.connect_login_result(result, "https://ilinkai.weixin.qq.com")
 
         assert len(adapter._tasks) == 1
+
+
+class TestLifecycleNotify:
+    @pytest.mark.asyncio
+    async def test_start_polling_calls_notify_start(self) -> None:
+        """_start_polling 应在轮询前调用 notify_start"""
+        adapter = FakeAdapter()
+        bot = Bot(adapter, "test-bot", ACCOUNT_INFO)  # pyright: ignore[reportArgumentType]
+        bot.notify_start = AsyncMock()
+        bot.get_updates = AsyncMock(side_effect=asyncio.CancelledError)
+        await adapter._start_polling(bot)
+        bot.notify_start.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_start_polling_continues_on_notify_failure(self) -> None:
+        """notify_start 失败不影响轮询启动"""
+        adapter = FakeAdapter()
+        bot = Bot(adapter, "test-bot", ACCOUNT_INFO)  # pyright: ignore[reportArgumentType]
+        bot.notify_start = AsyncMock(side_effect=NetworkError("fail"))
+        bot.get_updates = AsyncMock(side_effect=asyncio.CancelledError)
+        await adapter._start_polling(bot)  # 不应抛异常
+
+    @pytest.mark.asyncio
+    async def test_cleanup_calls_notify_stop(self) -> None:
+        """_cleanup 应对已连接 bot 调用 notify_stop"""
+        adapter = FakeAdapter()
+        bot = Bot(adapter, "test-bot", ACCOUNT_INFO)  # pyright: ignore[reportArgumentType]
+        bot.notify_stop = AsyncMock()
+        adapter.bots["test-bot"] = bot
+        await adapter._cleanup()
+        bot.notify_stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_continues_on_notify_stop_failure(self) -> None:
+        """notify_stop 失败不影响 bot_disconnect"""
+        adapter = FakeAdapter()
+        bot = Bot(adapter, "test-bot", ACCOUNT_INFO)  # pyright: ignore[reportArgumentType]
+        bot.notify_stop = AsyncMock(side_effect=NetworkError("fail"))
+        adapter.bots["test-bot"] = bot
+        await adapter._cleanup()
+        assert "test-bot" not in adapter.bots

@@ -688,3 +688,36 @@ class TestFetchMedia:
 
         with pytest.raises(ValueError, match="fetch_media"):
             await bot.send(event, msg)
+
+
+class TestNotifyLifecycle:
+    @pytest.fixture
+    def bot(self, account_info: WxClawAccountInfo) -> Bot:
+        adapter = AsyncMock()
+        adapter.adapter_config = Config()
+        return Bot(adapter, "test-bot", account_info)
+
+    @pytest.mark.asyncio
+    async def test_notify_start_request(self, bot: Bot) -> None:
+        from nonebot.drivers import Response
+
+        bot.adapter.request = AsyncMock(
+            return_value=Response(200, content=b'{"ret": 0}')
+        )
+        # 绕过 API 描述符, 直接调用底层函数
+        await Bot.__dict__["notify_start"].func(bot)
+        req = bot.adapter.request.call_args[0][0]
+        assert "notifystart" in req.url.path
+        assert req.method == "POST"
+
+    @pytest.mark.asyncio
+    async def test_notify_stop_request(self, bot: Bot) -> None:
+        from nonebot.drivers import Response
+
+        bot.adapter.request = AsyncMock(
+            return_value=Response(200, content=b'{"ret": 0}')
+        )
+        await Bot.__dict__["notify_stop"].func(bot)
+        req = bot.adapter.request.call_args[0][0]
+        assert "notifystop" in req.url.path
+        assert req.method == "POST"
