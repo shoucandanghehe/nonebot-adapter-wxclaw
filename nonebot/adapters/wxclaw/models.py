@@ -205,3 +205,10 @@ class QRStatusResponse(_BaseModel):
     baseurl: str | None = None
     ilink_user_id: str | None = None
     redirect_host: str | None = None
+
+
+class NotifyResponse(_BaseModel):
+    """notifystart / notifystop 响应, 共享同一结构"""
+
+    ret: int | None = None
+    errmsg: str | None = None

@@ -96,6 +96,14 @@ class Adapter(BaseAdapter):
         self._tasks.clear()
 
         for bot in list(self.bots.values()):
+            if isinstance(bot, Bot):
+                try:
+                    await bot.notify_stop()
+                except Exception as e:
+                    log(
+                        "WARNING",
+                        f"notifyStop failed for {bot.self_id} (ignored): {e}",
+                    )
             self.bot_disconnect(bot)
 
     def _dispatch_message(self, bot: Bot, msg: WeixinMessage) -> None:
@@ -111,6 +119,14 @@ class Adapter(BaseAdapter):
             log("ERROR", f"Failed to parse event: {e}", e)
 
     async def _start_polling(self, bot: Bot) -> None:
+        try:
+            await bot.notify_start()
+        except Exception as e:
+            log(
+                "WARNING",
+                f"notifyStart failed for {bot.self_id} (ignored): {e}",
+            )
+
         retry_delay = 1.0
         max_retry_delay = 60.0
 

@@ -262,6 +262,38 @@ class Bot(BaseBot):
         return type_validate_python(GetConfigResponse, data)
 
     @API
+    async def notify_start(self) -> None:
+        """通知微信服务端 channel 已启动 (失败不影响主流程)"""
+        body: dict[str, Any] = {
+            "base_info": build_base_info(
+                self.adapter.adapter_config.wxclaw_channel_version,
+            ),
+        }
+        request = Request(
+            "POST",
+            self.get_api_url("ilink/bot/msg/notifystart"),
+            json=body,
+            timeout=self.adapter.adapter_config.wxclaw_api_timeout / 1000,
+        )
+        await self._request(request, label="notifyStart")
+
+    @API
+    async def notify_stop(self) -> None:
+        """通知微信服务端 channel 即将停止 (失败不影响主流程)"""
+        body: dict[str, Any] = {
+            "base_info": build_base_info(
+                self.adapter.adapter_config.wxclaw_channel_version,
+            ),
+        }
+        request = Request(
+            "POST",
+            self.get_api_url("ilink/bot/msg/notifystop"),
+            json=body,
+            timeout=self.adapter.adapter_config.wxclaw_api_timeout / 1000,
+        )
+        await self._request(request, label="notifyStop")
+
+    @API
     async def get_upload_url(
         self,
         *,
