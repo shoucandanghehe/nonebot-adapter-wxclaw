@@ -220,6 +220,14 @@ class Adapter(BaseAdapter):
                 if len(local_token_list) >= 10:
                     break
 
+        if len(local_token_list) < 10:
+            for account in self.adapter_config.wxclaw_accounts:
+                token = account.token.strip()
+                if token and token not in local_token_list:
+                    local_token_list.append(token)
+                    if len(local_token_list) >= 10:
+                        break
+
         body = {"local_token_list": local_token_list}
         request = Request(
             "POST",
@@ -296,7 +304,7 @@ class Adapter(BaseAdapter):
         bot_type: str = DEFAULT_BOT_TYPE,
         timeout_ms: int = 480000,
         _on_refresh: QrRefreshCallback | None = None,
-        _verify_code_callback: VerifyCodeCallback | None = None,
+        verify_code_callback: VerifyCodeCallback | None = None,
     ) -> WxClawLoginResult:
         try:
             return await wait_for(
@@ -305,7 +313,7 @@ class Adapter(BaseAdapter):
                     base_url=base_url,
                     bot_type=bot_type,
                     _on_refresh=_on_refresh,
-                    _verify_code_callback=_verify_code_callback,
+                    _verify_code_callback=verify_code_callback,
                 ),
                 timeout=timeout_ms / 1000,
             )
@@ -379,6 +387,8 @@ class Adapter(BaseAdapter):
                     f"QR expired, refreshing"
                     f" ({qr_refresh_count}/{MAX_QR_REFRESH_COUNT})",
                 )
+                pending_verify_code = ""
+                current_base_url = base_url
                 current_qrcode, qrcode_url = await self.start_qr_login(
                     base_url=base_url,
                     bot_type=bot_type,
@@ -402,12 +412,19 @@ class Adapter(BaseAdapter):
                         message="需要输入手机微信显示的配对数字，"
                         "但未提供 verify_code_callback",
                     )
-                code = await _verify_code_callback()
-                pending_verify_code = code.strip()
+                code = (await _verify_code_callback()).strip()
+                if not code:
+                    return WxClawLoginResult(
+                        connected=False,
+                        need_verify_code=True,
+                        message="verify_code_callback 返回了空值",
+                    )
+                pending_verify_code = code
                 continue
 
             if status == "verify_code_blocked":
                 pending_verify_code = ""
+                current_base_url = base_url
                 qr_refresh_count += 1
                 if qr_refresh_count >= MAX_QR_REFRESH_COUNT:
                     return WxClawLoginResult(

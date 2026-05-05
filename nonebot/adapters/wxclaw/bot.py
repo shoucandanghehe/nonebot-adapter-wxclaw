@@ -271,6 +271,7 @@ class Bot(BaseBot):
         body: dict[str, Any] = {
             "base_info": build_base_info(
                 self.adapter.adapter_config.wxclaw_channel_version,
+                self.adapter.adapter_config.wxclaw_bot_agent,
             ),
         }
         request = Request(
@@ -287,6 +288,7 @@ class Bot(BaseBot):
         body: dict[str, Any] = {
             "base_info": build_base_info(
                 self.adapter.adapter_config.wxclaw_channel_version,
+                self.adapter.adapter_config.wxclaw_bot_agent,
             ),
         }
         request = Request(

@@ -60,7 +60,7 @@ class QrLoginSession:
             bot_type=self._bot_type,
             timeout_ms=self._timeout_ms,
             _on_refresh=_on_refresh,
-            _verify_code_callback=self._verify_code_callback,
+            verify_code_callback=self._verify_code_callback,
         )
         result.qrcode_url = self.qrcode_url
 

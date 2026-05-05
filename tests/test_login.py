@@ -208,7 +208,7 @@ class TestQrNewStatuses:
         result = await adapter.wait_qr_login(
             qrcode="qr1",
             timeout_ms=5000,
-            _verify_code_callback=callback,
+            verify_code_callback=callback,
         )
         assert result.connected
         callback.assert_called_once()
@@ -220,6 +220,18 @@ class TestQrNewStatuses:
         result = await adapter.wait_qr_login(qrcode="qr1", timeout_ms=5000)
         assert not result.connected
         assert result.need_verify_code
+
+    @pytest.mark.asyncio
+    async def test_need_verifycode_empty_callback(self) -> None:
+        """回调返回空字符串时返回 need_verify_code=True"""
+        adapter = make_adapter_with_responses({"status": "need_verifycode"})
+        callback = AsyncMock(return_value="  ")
+        result = await adapter.wait_qr_login(
+            qrcode="qr1", timeout_ms=5000, verify_code_callback=callback,
+        )
+        assert not result.connected
+        assert result.need_verify_code
+        assert "空值" in result.message
 
     @pytest.mark.asyncio
     async def test_verify_code_blocked_refreshes(self) -> None:
@@ -281,7 +293,7 @@ class TestQrNewStatuses:
         result = await adapter.wait_qr_login(
             qrcode="qr1",
             timeout_ms=5000,
-            _verify_code_callback=callback,
+            verify_code_callback=callback,
         )
         assert result.connected
         # 第二次 request 调用（pollQRStatus）应包含 verify_code 参数
