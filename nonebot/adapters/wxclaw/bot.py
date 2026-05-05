@@ -596,6 +596,14 @@ class Bot(BaseBot):
             prepared.append(await self._prepare_segment(seg, to_user_id))
         item_list = message_to_item_list(prepared)
 
+        if not item_list:
+            unsupported = [seg.type for seg in prepared if seg.type not in ("text", "image", "file", "video")]
+            if unsupported:
+                msg_err = f"不支持发送的消息类型: {', '.join(unsupported)}"
+            else:
+                msg_err = "消息内容为空"
+            raise ValueError(msg_err)
+
         context_token = kwargs.get("context_token") or event.context_token
 
         weixin_msg = self._build_outgoing_msg(

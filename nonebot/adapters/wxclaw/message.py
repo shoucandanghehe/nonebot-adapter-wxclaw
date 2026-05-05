@@ -17,6 +17,7 @@ from .models import (
     MessageItemType,
     TextItem,
     VideoItem,
+    VoiceItem,
 )
 
 
@@ -197,6 +198,11 @@ def _seg_to_item(seg: MessageSegment) -> MessageItem | None:
                 file_name=seg.data.get("file_name", ""),
             )
         return MessageItem(type=MessageItemType.FILE, file_item=file_item)
+    if seg.type == "voice":
+        voice_item: VoiceItem | None = seg.data.get("voice_item")
+        if not voice_item:
+            voice_item = VoiceItem(media=seg.data.get("media"))
+        return MessageItem(type=MessageItemType.VOICE, voice_item=voice_item)
     if seg.type == "video":
         video_item: VideoItem | None = seg.data.get("video_item")
         if not video_item:
@@ -211,7 +217,9 @@ def message_to_item_list(message: Message | str) -> list[MessageItem]:
 
     items: list[MessageItem] = []
     for seg in message:
-        if seg.type in ("ref", "voice"):
+        if seg.type == "ref":
+            continue
+        if seg.type == "voice":
             continue
         item = _seg_to_item(seg)
         if item is not None:
