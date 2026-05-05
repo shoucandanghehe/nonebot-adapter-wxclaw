@@ -44,10 +44,7 @@ class ActionFailed(WxClawAdapterException, BaseActionFailed):
 
     @override
     def __repr__(self) -> str:
-        return (
-            f"ActionFailed(ret={self.ret}, errcode={self.errcode},"
-            f" errmsg={self.errmsg!r})"
-        )
+        return f"ActionFailed(ret={self.ret}, errcode={self.errcode}, errmsg={self.errmsg!r})"
 
 
 class SessionExpiredError(ActionFailed):

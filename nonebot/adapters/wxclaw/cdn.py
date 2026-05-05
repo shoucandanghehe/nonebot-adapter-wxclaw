@@ -35,8 +35,5 @@ def parse_aes_key(aes_key_base64: str) -> bytes:
                 return bytes.fromhex(ascii_str)
         except (UnicodeDecodeError, ValueError):
             pass
-    msg = (
-        f"aes_key must decode to 16 raw bytes or 32-char hex string,"
-        f" got {len(decoded)} bytes"
-    )
+    msg = f"aes_key must decode to 16 raw bytes or 32-char hex string, got {len(decoded)} bytes"
     raise ValueError(msg)

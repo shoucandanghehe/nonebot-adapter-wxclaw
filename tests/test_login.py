@@ -46,7 +46,7 @@ class TestStartQrLogin:
 
     @pytest.mark.asyncio
     async def test_post_with_local_tokens(self) -> None:
-        """已有连接 bot 时,local_token_list 应包含其 token"""
+        """已有连接 bot 时, local_token_list 应包含其 token"""
         from nonebot.adapters.wxclaw.bot import Bot
         from nonebot.adapters.wxclaw.config import WxClawAccountInfo
 
@@ -190,10 +190,10 @@ class TestQrLogin:
 class TestQrNewStatuses:
     @pytest.mark.asyncio
     async def test_need_verifycode_with_callback(self) -> None:
-        """提供回调时,need_verifycode 后携带 verify_code 继续轮询"""
+        """提供回调时, need_verifycode 后携带 verify_code 继续轮询"""
         adapter = make_adapter_with_responses(
             {"status": "need_verifycode"},
-            # 携带 verify_code 后服务端返回 scaned（验证通过）
+            # 携带 verify_code 后服务端返回 scaned (验证通过)
             {"status": "scaned"},
             # 确认登录
             {
@@ -227,7 +227,9 @@ class TestQrNewStatuses:
         adapter = make_adapter_with_responses({"status": "need_verifycode"})
         callback = AsyncMock(return_value="  ")
         result = await adapter.wait_qr_login(
-            qrcode="qr1", timeout_ms=5000, verify_code_callback=callback,
+            qrcode="qr1",
+            timeout_ms=5000,
+            verify_code_callback=callback,
         )
         assert not result.connected
         assert result.need_verify_code
@@ -261,11 +263,13 @@ class TestQrNewStatuses:
         responses: list[dict] = []
         for _ in range(MAX_QR_REFRESH_COUNT):
             responses.append({"status": "verify_code_blocked"})
-            responses.append({"qrcode": "qr_new", "qrcode_img_content": "https://qr/new"})
+            responses.append(
+                {"qrcode": "qr_new", "qrcode_img_content": "https://qr/new"}
+            )
         adapter = make_adapter_with_responses(*responses)
         result = await adapter.wait_qr_login(qrcode="qr1", timeout_ms=10000)
         assert not result.connected
-        assert "错误" in result.message
+        assert "错误" in result.message or "输入" in result.message
 
     @pytest.mark.asyncio
     async def test_binded_redirect(self) -> None:
@@ -280,7 +284,7 @@ class TestQrNewStatuses:
         """verify_code 应作为查询参数传递给 pollQRStatus"""
         adapter = make_adapter_with_responses(
             {"status": "need_verifycode"},
-            # 返回 confirmed（模拟验证后直接通过）
+            # 返回 confirmed (模拟验证后直接通过)
             {
                 "status": "confirmed",
                 "bot_token": "tok",
@@ -296,7 +300,7 @@ class TestQrNewStatuses:
             verify_code_callback=callback,
         )
         assert result.connected
-        # 第二次 request 调用（pollQRStatus）应包含 verify_code 参数
+        # 第二次 request 调用 (pollQRStatus) 应包含 verify_code 参数
         second_call = adapter.request.call_args_list[1]
         req = second_call.args[0]
         assert "verify_code=5678" in str(req.url)

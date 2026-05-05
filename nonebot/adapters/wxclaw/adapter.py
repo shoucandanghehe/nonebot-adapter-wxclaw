@@ -62,9 +62,8 @@ class Adapter(BaseAdapter):
     def setup(self) -> None:
         if not isinstance(self.driver, HTTPClientMixin):
             msg = (
-                f"Current driver {self.config.driver} does not support HTTP client."
-                " WxClaw adapter requires an HTTP client driver such as"
-                " ~httpx or ~aiohttp."
+                f"Current driver {self.config.driver} does not support HTTP client. "
+                f"WxClaw adapter requires an HTTP client driver such as ~httpx or ~aiohttp."
             )
             raise TypeError(msg)
         self.on_ready(self._setup)
@@ -77,8 +76,7 @@ class Adapter(BaseAdapter):
             if not account.token:
                 log(
                     "WARNING",
-                    f"Account {account.account_id} has no token, skipping"
-                    " (use QR login to obtain one)",
+                    f"Account {account.account_id} has no token, skipping (use QR login to obtain one)",
                 )
                 continue
             bot = Bot(self, account.account_id, account)
@@ -119,7 +117,7 @@ class Adapter(BaseAdapter):
         except Exception as e:
             log("ERROR", f"Failed to parse event: {e}", e)
 
-    async def _start_polling(self, bot: Bot) -> None:
+    async def _start_polling(self, bot: Bot) -> None:  # noqa: C901, PLR0912
         try:
             await bot.notify_start()
         except Exception as e:
@@ -150,8 +148,7 @@ class Adapter(BaseAdapter):
             except SessionExpiredError:
                 log(
                     "ERROR",
-                    f"Session expired for account {bot.self_id},"
-                    " stopping polling. Re-login required.",
+                    f"Session expired for account {bot.self_id}, stopping polling. Re-login required.",
                 )
                 if bot.self_id in self.bots:
                     self.bot_disconnect(bot)
@@ -161,8 +158,7 @@ class Adapter(BaseAdapter):
                 if e.status_code in (401, 403):
                     log(
                         "ERROR",
-                        f"Unauthorized ({e.status_code}) for account {bot.self_id},"
-                        " stopping polling. Re-login required.",
+                        f"Unauthorized ({e.status_code}) for account {bot.self_id}, stopping polling. Re-login required.",
                     )
                     if bot.self_id in self.bots:
                         self.bot_disconnect(bot)
@@ -196,7 +192,7 @@ class Adapter(BaseAdapter):
             raise ApiNotAvailable(api)
         return await api_handler(bot, **data)
 
-    async def _fetch_qr_code(
+    async def _fetch_qr_code(  # noqa: C901
         self,
         *,
         base_url: str = FIXED_BASE_URL,
@@ -278,7 +274,9 @@ class Adapter(BaseAdapter):
             return QRStatusResponse(status="wait")
 
         if resp.status_code != 200:
-            log("DEBUG", f"pollQRStatus: HTTP {resp.status_code}, returning wait status")
+            log(
+                "DEBUG", f"pollQRStatus: HTTP {resp.status_code}, returning wait status"
+            )
             return QRStatusResponse(status="wait")
 
         content = resp.content
@@ -320,7 +318,7 @@ class Adapter(BaseAdapter):
         except AsyncioTimeoutError:
             return WxClawLoginResult(connected=False, message="Login timed out")
 
-    async def _poll_qr_until_done(  # noqa: C901
+    async def _poll_qr_until_done(  # noqa: C901, PLR0912, PLR0915
         self,
         *,
         qrcode: str,
@@ -384,8 +382,7 @@ class Adapter(BaseAdapter):
                     )
                 log(
                     "INFO",
-                    f"QR expired, refreshing"
-                    f" ({qr_refresh_count}/{MAX_QR_REFRESH_COUNT})",
+                    f"QR expired, refreshing ({qr_refresh_count}/{MAX_QR_REFRESH_COUNT})",
                 )
                 pending_verify_code = ""
                 current_base_url = base_url
@@ -409,8 +406,7 @@ class Adapter(BaseAdapter):
                     return WxClawLoginResult(
                         connected=False,
                         need_verify_code=True,
-                        message="需要输入手机微信显示的配对数字，"
-                        "但未提供 verify_code_callback",
+                        message="需要输入手机微信显示的配对数字, 但未提供 verify_code_callback",
                     )
                 code = (await _verify_code_callback()).strip()
                 if not code:
@@ -429,12 +425,11 @@ class Adapter(BaseAdapter):
                 if qr_refresh_count >= MAX_QR_REFRESH_COUNT:
                     return WxClawLoginResult(
                         connected=False,
-                        message="多次输入错误，连接流程已停止",
+                        message="多次输入错误, 连接流程已停止",
                     )
                 log(
                     "INFO",
-                    f"Verify code blocked, refreshing QR"
-                    f" ({qr_refresh_count}/{MAX_QR_REFRESH_COUNT})",
+                    f"Verify code blocked, refreshing QR ({qr_refresh_count}/{MAX_QR_REFRESH_COUNT})",
                 )
                 current_qrcode, qrcode_url = await self.start_qr_login(
                     base_url=base_url,
@@ -447,7 +442,7 @@ class Adapter(BaseAdapter):
             if status == "binded_redirect":
                 return WxClawLoginResult(
                     connected=False,
-                    message="该微信已绑定此实例，无需重复连接",
+                    message="该微信已绑定此实例, 无需重复连接",
                 )
 
             await sleep(1)

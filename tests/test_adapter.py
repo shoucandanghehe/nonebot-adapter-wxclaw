@@ -59,17 +59,23 @@ class TestCallApi:
         async with app.test_api() as ctx:
             adapter = ctx.create_adapter(base=Adapter)
             bot = ctx.create_bot(
-                base=Bot, adapter=adapter, self_id="test-bot",
+                base=Bot,
+                adapter=adapter,
+                self_id="test-bot",
                 account_info=ACCOUNT_INFO,
             )
             adapter.request = AsyncMock(
                 return_value=type(
-                    "R", (), {"status_code": 200, "content": b'{"ret": 0}', "headers": {}},
+                    "R",
+                    (),
+                    {"status_code": 200, "content": b'{"ret": 0}', "headers": {}},
                 )(),
             )
             msg = WeixinMessage(
-                to_user_id="u1", message_type=MessageType.BOT,
-                message_state=MessageState.FINISH, item_list=[],
+                to_user_id="u1",
+                message_type=MessageType.BOT,
+                message_state=MessageState.FINISH,
+                item_list=[],
             )
             ctx.should_call_api("send_message", {"msg": msg}, None)
             await bot.call_api("send_message", msg=msg)
@@ -79,7 +85,9 @@ class TestCallApi:
         async with app.test_api() as ctx:
             adapter = ctx.create_adapter(base=Adapter)
             bot = ctx.create_bot(
-                base=Bot, adapter=adapter, self_id="test-bot",
+                base=Bot,
+                adapter=adapter,
+                self_id="test-bot",
                 account_info=ACCOUNT_INFO,
             )
             with pytest.raises(ApiNotAvailable):
@@ -134,7 +142,10 @@ class TestLifecycle:
         adapter.adapter_config = Config(
             wxclaw_accounts=[
                 WxClawAccountInfo(
-                    account_id="test-bot", token="t", base_url="http://x", enabled=False,
+                    account_id="test-bot",
+                    token="t",
+                    base_url="http://x",
+                    enabled=False,
                 ),
             ],
         )
@@ -150,7 +161,9 @@ class TestLifecycle:
         adapter.adapter_config = Config(
             wxclaw_accounts=[
                 WxClawAccountInfo(
-                    account_id="test-bot", token="", base_url="http://x",
+                    account_id="test-bot",
+                    token="",
+                    base_url="http://x",
                 ),
             ],
         )
@@ -237,7 +250,9 @@ class TestPolling:
             ],
         )
 
-        with patch("nonebot.adapters.wxclaw.adapter.handle_event", new_callable=AsyncMock) as mock_handle:
+        with patch(
+            "nonebot.adapters.wxclaw.adapter.handle_event", new_callable=AsyncMock
+        ) as mock_handle:
             adapter._dispatch_message(bot, msg)
 
             # Wait for the task to complete
@@ -280,7 +295,9 @@ class TestPolling:
 
         bot.get_updates = AsyncMock(side_effect=fake_get_updates)
 
-        with patch("nonebot.adapters.wxclaw.adapter.handle_event", new_callable=AsyncMock):
+        with patch(
+            "nonebot.adapters.wxclaw.adapter.handle_event", new_callable=AsyncMock
+        ):
             await adapter._start_polling(bot)
 
         assert bot.get_updates_buf == "buf1"
@@ -311,7 +328,9 @@ class TestPolling:
 
         bot.get_updates = AsyncMock(side_effect=fake_get_updates)
 
-        with patch("nonebot.adapters.wxclaw.adapter.handle_event", new_callable=AsyncMock) as mock_handle:
+        with patch(
+            "nonebot.adapters.wxclaw.adapter.handle_event", new_callable=AsyncMock
+        ) as mock_handle:
             await adapter._start_polling(bot)
 
         mock_handle.assert_not_called()

@@ -514,10 +514,7 @@ class Bot(BaseBot):
                 return seg
             media: CDNMedia | None = seg.data.get("media")
             if media and (media.encrypt_query_param or media.full_url):
-                msg = (
-                    f"{seg.type} segment has CDN reference but no content; "
-                    "call `await bot.fetch_media(message)` first"
-                )
+                msg = f"{seg.type} segment has CDN reference but no content; call `await bot.fetch_media(message)` first"
                 raise ValueError(msg)
             return seg
 
@@ -597,7 +594,11 @@ class Bot(BaseBot):
         item_list = message_to_item_list(prepared)
 
         if not item_list:
-            unsupported = [seg.type for seg in prepared if seg.type not in ("text", "image", "file", "video")]
+            unsupported = [
+                seg.type
+                for seg in prepared
+                if seg.type not in ("text", "image", "file", "video")
+            ]
             if unsupported:
                 msg_err = f"不支持发送的消息类型: {', '.join(unsupported)}"
             else:
