@@ -66,10 +66,11 @@ WXCLAW_ACCOUNTS='[{"account_id": "你的bot_id", "token": "你的token", "base_u
 |:-------|:-----|:-------|:-----|
 | `wxclaw_accounts` | `list[WxClawAccountInfo]` | `[]` | 账号列表 |
 | `wxclaw_ilink_app_id` | `str` | `"bot"` | iLink App ID |
-| `wxclaw_channel_version` | `str` | `"2.1.1"` | 通道版本号 |
+| `wxclaw_channel_version` | `str` | `"2.4.1"` | 通道版本号 |
 | `wxclaw_long_poll_timeout` | `int` | `35000` | 长轮询超时（毫秒） |
 | `wxclaw_api_timeout` | `int` | `15000` | API 请求超时（毫秒） |
 | `wxclaw_cdn_base_url` | `str` | `"https://novac2c.cdn.weixin.qq.com/c2c"` | CDN 基础 URL |
+| `wxclaw_bot_agent` | `str` | `""` | Bot 标识（类似 User-Agent），为空时默认 `"OpenClaw"` |
 
 ### 账号配置 (`WxClawAccountInfo`)
 
@@ -146,26 +147,14 @@ async def handle_login():
 
 ## 📨 支持的消息类型
 
-### 接收
-
-| 事件类型 | 类 | 说明 |
-|:---------|:-----|:-----|
-| 文本消息 | `TextMessageEvent` | 纯文本消息 |
-| 图片消息 | `ImageMessageEvent` | 包含 `image_item` |
-| 语音消息 | `VoiceMessageEvent` | 包含 `voice_item` |
-| 文件消息 | `FileMessageEvent` | 包含 `file_item` |
-| 视频消息 | `VideoMessageEvent` | 包含 `video_item` |
-
-### 发送
-
-| 类型 | 方法 | 说明 |
-|:-----|:-----|:-----|
-| 文本 | `bot.send_text()` | 发送纯文本 |
-| 图片 | `bot.send_image()` | 上传并发送图片 |
-| 文件 | `bot.send_file()` | 上传并发送文件 |
-| 视频 | `bot.send_video()` | 上传并发送视频 |
-
-> **注意**: 上游协议不支持发送语音消息和引用回复。接收到的语音和引用消息可以正常解析，但无法通过 Bot 发送。
+| 类型 | 接收 | 发送 | 事件类 / 方法 | 说明 |
+|:-----|:----:|:----:|:-------------|:-----|
+| 文本 | ✅ | ✅ | `TextMessageEvent` / `bot.send_text()` | |
+| 图片 | ✅ | ✅ | `ImageMessageEvent` / `bot.send_image()` | CDN 引用可直接转发 |
+| 文件 | ✅ | ✅ | `FileMessageEvent` / `bot.send_file()` | 转发需先 `fetch_media()` |
+| 视频 | ✅ | ✅ | `VideoMessageEvent` / `bot.send_video()` | 转发需先 `fetch_media()` |
+| 语音 | ✅ | ❌ | `VoiceMessageEvent` | 协议不支持发送语音 |
+| 引用 | ✅ | ❌ | 消息段 `type="ref"` | 协议不支持发送引用 |
 
 ### 🔄 转发媒体
 
