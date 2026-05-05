@@ -327,6 +327,7 @@ class Bot(BaseBot):
         label: str = "cdnUpload",
         max_retries: int = 3,
     ) -> str:
+        last_err: Exception | None = None
         for attempt in range(1, max_retries + 1):
             try:
                 request = Request(
@@ -334,6 +335,7 @@ class Bot(BaseBot):
                     upload_url,
                     headers={"Content-Type": "application/octet-stream"},
                     content=encrypted_data,
+                    timeout=120.0,
                 )
                 resp = await self.adapter.request(request)
 
@@ -352,13 +354,22 @@ class Bot(BaseBot):
                 log("DEBUG", f"{label}: upload success on attempt {attempt}")
                 return download_param
 
-            except NetworkError:
-                if attempt >= max_retries:
+            except NetworkError as e:
+                if e.args and "client error" in str(e.args[0]):
                     raise
-                log(
-                    "WARNING",
-                    f"{label}: attempt {attempt} failed, retrying...",
+                last_err = e
+            except Exception as e:
+                last_err = NetworkError(f"{label}: {e}")
+                last_err.__cause__ = e
+
+            if attempt >= max_retries:
+                raise last_err or NetworkError(
+                    f"{label}: upload failed after {max_retries} attempts",
                 )
+            log(
+                "WARNING",
+                f"{label}: attempt {attempt} failed, retrying...",
+            )
 
         msg = f"{label}: upload failed after {max_retries} attempts"
         raise NetworkError(msg)
@@ -370,7 +381,7 @@ class Bot(BaseBot):
         aes_key_base64: str,
         label: str = "cdnDownload",
     ) -> bytes:
-        request = Request("GET", url)
+        request = Request("GET", url, timeout=60.0)
         try:
             resp = await self.adapter.request(request)
         except Exception as e:
