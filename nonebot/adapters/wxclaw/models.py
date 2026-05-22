@@ -120,8 +120,10 @@ class RefMessage(_BaseModel):
     message_item: MessageItem | None = None
     title: str | None = None
 
-
-MessageItem.model_rebuild()
+if PYDANTIC_V2:
+    MessageItem.model_rebuild()
+else:
+    MessageItem.update_forward_refs()
 
 
 class WeixinMessage(_BaseModel):
